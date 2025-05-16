@@ -1,0 +1,79 @@
+# simulation_project/config.yaml
+simulation_params:
+  kappa: 0.1
+  num_trajectories_main: 2500
+  num_seed_runs_plot4: 3
+  global_seeds_plot4: [42, 123, 789]
+  
+
+  # Physical simulation end time for each regime
+  regime_physical_t_end:
+    Low: 30.0    # Low n runs for 10.0 physical time units
+    Medium: 15.0 # Medium n runs for 15.0 physical time units
+    High: 15.0    # High n runs for 5.0 physical time units
+
+  # Desired number of time points in the output data for each simulation
+  # This ensures (num_simulation_points - 1) steps, keeping resources consistent.
+  num_simulation_points: 501 # Results in 500 steps
+
+  # base_dt_pplus: 0.0005 # This will now be calculated dynamically
+  num_workers_pplus: null
+
+photon_regimes:
+  Low: 1
+  Medium: 20
+  High: 100
+
+data_handling:
+  data_dir: "simulation_data_combined"
+  force_rerun_all: false
+
+plotting:
+  plot_dir: "plots"
+  generate_plot1_squeezing: true
+  generate_plot2_pump_depletion: true
+  generate_plot3_photon_tracker: true
+  generate_plot4_seed_variance: true
+  plot_style: 'seaborn-v0_8-whitegrid'
+  epsilon_db: 1.0e-15
+  vacuum_noise_quad_variance: 0.25
+  medium_regime_key_for_plot3: "Medium" # Still relevant for Plot 3 content
+  
+  # NEW: Default/fallback y-limit for Pump Depletion plots (Plot 2)
+  plot_ylim_pump_depletion_default: [0, 120] # Example: Max expected initial pump
+
+  # NEW: Default/fallback y-limit for Photon Tracker plots (Plot 3)
+  # This will apply to both subplots (TW and +P) in Plot 3
+  plot_ylim_photon_tracker_default: [-1, 25] # Example: Covers typical n1 and n2 values
+
+  # Default/fallback PLOT limits (now in PHYSICAL time)
+  plot_xlim_physical: [0, 10.0]  # Default xlim for plots, in physical time units
+  plot_ylim_squeezing: [-10, 5]  # Default ylim for squeezing plots
+
+  # Plot 1 (Squeezing) specific axis limits per regime (in PHYSICAL time)
+  plot1_squeezing_regime_limits:
+    Low:
+      xlim: [0, 30.0] # Should be <= Low regime's physical_t_end (10.0)
+      ylim: [-10, 10]
+    Medium:
+      xlim: [0, 15.0] # Should be <= Medium regime's physical_t_end (15.0)
+      ylim: [-15, 25]
+    High:
+      xlim: [0, 10]  # Should be <= High regime's physical_t_end (5.0)
+      ylim: [-20,30]
+
+  # NEW: Plot 2 (Pump Depletion) specific Y-AXIS limits per regime
+  plot2_pump_depletion_regime_ylimits:
+    Low:
+      ylim: [0, 2.0]    # Example: Initial pump for Low (n=1) is 1.0
+    Medium:
+      ylim: [0, 25.0]   # Example: Initial pump for Medium (n=20) is 20.0
+    High:
+      ylim: [0, 110.0]  # Example: Initial pump for High (n=100) is 100.0
+    # If a regime is omitted, it will use plot_ylim_pump_depletion_default
+
+  # NEW: Plot 3 (Photon Tracker) specific Y-AXIS limits
+  # These apply to the single regime selected by medium_regime_key_for_plot3
+  # This ylim will be used for both the TW and +P subplots in Plot 3.
+  plot3_photon_tracker_ylim: [-2, 30] # Example: Override the default for Plot 3
+                                        # Set to encompass expected n1 and n2 values for 'Medium' regime
