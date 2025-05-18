@@ -1,32 +1,59 @@
 # simulation_project/config.yaml
 simulation_params:
   kappa: 0.1
-  num_trajectories_main: 2500
-  num_seed_runs_plot4: 3
-  global_seeds_plot4: [42, 123, 789]
+  num_trajectories_main: 2500 # Used per individual seed run
   
+  # --- Parameters for original Plot 1-4 regimes ---
+  num_seed_runs_plot4: 100  # Max seeds to run, primarily for +P stats & Plot 4 +P.
+  num_seed_runs_plot4_tw: 3 # Number of seeds for TW for Plot 4 (e.g., 3).
+                            # TW will use the first 3 seeds from global_seeds_plot4.
+  global_seeds_plot4: [
+    42, 123, 789, 734, 890, 567, 37, 236, 106, 888,
+    1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010,
+    2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
+    3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010,
+    4001, 4002, 4003, 4004, 4005, 4006, 4007, 4008, 4009, 4010,
+    5001, 5002, 5003, 5004, 5005, 5006, 5007, 5008, 5009, 5010,
+    6001, 6002, 6003, 6004, 6005, 6006, 6007, 6008, 6009, 6010,
+    7001, 7002, 7003, 7004, 7005, 7006, 7007, 7008, 7009, 7010,
+    8001, 8002, 8003, 8004, 8005, 8006, 8007, 8008, 8009, 8010,
+    9001, 9002, 9003, 9004, 9005, 9006, 9007, 9008, 9009, 9010
+  ] # List of 100 seeds.
+  
+  regime_physical_t_end: # For original Low, Medium, High plots
+    Low: 30.0
+    Medium: 15.0
+    High: 15.0
 
-  # Physical simulation end time for each regime
-  regime_physical_t_end:
-    Low: 30.0    # Low n runs for 10.0 physical time units
-    Medium: 15.0 # Medium n runs for 15.0 physical time units
-    High: 15.0    # High n runs for 5.0 physical time units
+  # --- Parameters for the N-Scan for Max Squeezing Plot ---
+  n_scan_active: false # Set to true to run the n-scan simulations
+  n_scan_values: [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+  n_scan_seeds: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110] # 10 distinct seeds for n-scan
+  n_scan_t_ends: # Physical end times for each n_scan_value
+    1: 30.0
+    10: 20.0
+    20: 15.0
+    30: 15.0
+    40: 15.0
+    50: 15.0
+    60: 15.0
+    70: 15.0
+    80: 15.0
+    90: 15.0
+    100: 15.0
+  # --- End of N-Scan Parameters ---
 
-  # Desired number of time points in the output data for each simulation
-  # This ensures (num_simulation_points - 1) steps, keeping resources consistent.
-  num_simulation_points: 501 # Results in 500 steps
+  num_simulation_points: 501 # Global for all simulations (TW and +P)
+  num_workers_pplus: null # null for multiprocessing.cpu_count(), or set a specific number
 
-  # base_dt_pplus: 0.0005 # This will now be calculated dynamically
-  num_workers_pplus: null
-
-photon_regimes:
+photon_regimes: # For original Plot 1-4
   Low: 1
   Medium: 20
   High: 100
 
 data_handling:
   data_dir: "simulation_data_combined"
-  force_rerun_all: false
+  force_rerun_all: false # Set to true to force all simulations to rerun
 
 plotting:
   plot_dir: "plots"
@@ -34,46 +61,38 @@ plotting:
   generate_plot2_pump_depletion: true
   generate_plot3_photon_tracker: true
   generate_plot4_seed_variance: true
+  generate_plot_max_squeezing_vs_n: true # Flag for the new plot
+
   plot_style: 'seaborn-v0_8-whitegrid'
   epsilon_db: 1.0e-15
   vacuum_noise_quad_variance: 0.25
-  medium_regime_key_for_plot3: "Medium" # Still relevant for Plot 3 content
+  medium_regime_key_for_plot3: "Medium"
   
-  # NEW: Default/fallback y-limit for Pump Depletion plots (Plot 2)
-  plot_ylim_pump_depletion_default: [0, 120] # Example: Max expected initial pump
+  plot_ylim_pump_depletion_default: [0, 120]
+  plot_ylim_photon_tracker_default: [-1, 25]
+  plot_xlim_physical: [0, 10.0]  # Default physical xlim for plots
+  plot_ylim_squeezing: [-10, 5]   # Default ylim for squeezing plots
 
-  # NEW: Default/fallback y-limit for Photon Tracker plots (Plot 3)
-  # This will apply to both subplots (TW and +P) in Plot 3
-  plot_ylim_photon_tracker_default: [-1, 25] # Example: Covers typical n1 and n2 values
-
-  # Default/fallback PLOT limits (now in PHYSICAL time)
-  plot_xlim_physical: [0, 10.0]  # Default xlim for plots, in physical time units
-  plot_ylim_squeezing: [-10, 5]  # Default ylim for squeezing plots
-
-  # Plot 1 (Squeezing) specific axis limits per regime (in PHYSICAL time)
   plot1_squeezing_regime_limits:
     Low:
-      xlim: [0, 30.0] # Should be <= Low regime's physical_t_end (10.0)
+      xlim: [0, 30.0]
       ylim: [-10, 10]
     Medium:
-      xlim: [0, 15.0] # Should be <= Medium regime's physical_t_end (15.0)
+      xlim: [0, 15.0]
       ylim: [-15, 25]
     High:
-      xlim: [0, 10]  # Should be <= High regime's physical_t_end (5.0)
-      ylim: [-20,30]
+      xlim: [0, 10.0] 
+      ylim: [-20, 30]
 
-  # NEW: Plot 2 (Pump Depletion) specific Y-AXIS limits per regime
   plot2_pump_depletion_regime_ylimits:
     Low:
-      ylim: [0, 2.0]    # Example: Initial pump for Low (n=1) is 1.0
+      ylim: [0, 2.0]
     Medium:
-      ylim: [0, 25.0]   # Example: Initial pump for Medium (n=20) is 20.0
+      ylim: [0, 25.0]
     High:
-      ylim: [0, 110.0]  # Example: Initial pump for High (n=100) is 100.0
-    # If a regime is omitted, it will use plot_ylim_pump_depletion_default
+      ylim: [0, 110.0]
 
-  # NEW: Plot 3 (Photon Tracker) specific Y-AXIS limits
-  # These apply to the single regime selected by medium_regime_key_for_plot3
-  # This ylim will be used for both the TW and +P subplots in Plot 3.
-  plot3_photon_tracker_ylim: [-2, 30] # Example: Override the default for Plot 3
-                                        # Set to encompass expected n1 and n2 values for 'Medium' regime
+  plot3_photon_tracker_ylim: [-2, 30]
+
+  # Threshold for the n-scan plot reliability
+  n_scan_reliability_std_threshold_linear: 0.05

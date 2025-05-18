@@ -19,6 +19,8 @@ from plotting.plot_squeezing import create_squeezing_plot
 from plotting.plot_pump_depletion import create_pump_depletion_plot
 from plotting.plot_photon_tracker import create_photon_tracker_plot
 from plotting.plot_seed_variance import create_seed_variance_plot
+from plotting.plot_max_squeezing_vs_n import create_max_squeezing_vs_n_plot
+
 
 def load_config(config_path="config.yaml"):
     with open(config_path, 'r') as f:
@@ -35,11 +37,28 @@ def main(config_path):
 
     kappa = sim_params['kappa']
     num_traj_main = sim_params['num_trajectories_main']
-    num_seed_runs_plot4 = sim_params['num_seed_runs_plot4']
-    global_seeds_plot4 = sim_params['global_seeds_plot4']
-    if len(global_seeds_plot4) < num_seed_runs_plot4:
-        print(f"Warning: Not enough seeds for {num_seed_runs_plot4} runs. Using {len(global_seeds_plot4)}.")
-        num_seed_runs_plot4 = len(global_seeds_plot4)
+    
+    # Seeds for original plots (Plot4 and error band in Plot1 for +P)
+    num_seeds_for_pp_plot4 = sim_params.get('num_seed_runs_plot4', 1) # Primarily for +P
+    num_seeds_for_tw_plot4 = sim_params.get('num_seed_runs_plot4_tw', 1) # Specific for TW
+    
+    global_seeds_config_list = sim_params.get('global_seeds_plot4', [0]) # Default to one seed if not provided
+    if not global_seeds_config_list: # Ensure it's at least [0] if empty list provided
+        global_seeds_config_list = [0]
+
+    # Validate seed numbers against available seeds
+    max_seeds_needed_for_orig_regimes = max(num_seeds_for_pp_plot4, num_seeds_for_tw_plot4)
+    if len(global_seeds_config_list) < max_seeds_needed_for_orig_regimes:
+        print(f"Warning: Not enough seeds in 'global_seeds_plot4' ({len(global_seeds_config_list)}) "
+              f"for requested runs (up to {max_seeds_needed_for_orig_regimes}). "
+              f"Will use available seeds.")
+    
+    # Effective number of seeds to process for +P and TW
+    effective_num_seeds_pp = min(num_seeds_for_pp_plot4, len(global_seeds_config_list))
+    effective_num_seeds_tw = min(num_seeds_for_tw_plot4, len(global_seeds_config_list))
+    if effective_num_seeds_tw == 0 and len(global_seeds_config_list) > 0: # Ensure TW runs at least once if seeds are available
+        effective_num_seeds_tw = 1
+
 
     regime_physical_t_ends = sim_params['regime_physical_t_end']
     num_points = sim_params['num_simulation_points']
@@ -57,126 +76,176 @@ def main(config_path):
     plt.style.use(plot_conf.get('plot_style', 'seaborn-v0_8-whitegrid'))
 
     print(f"--- Simulation Configuration ---")
-    print(f"Kappa: {kappa}, Main Trajectories: {num_traj_main}")
-    print(f"Number of Simulation Points: {num_points} (i.e., {num_points - 1} steps)")
+    print(f"Kappa: {kappa}, Main Trajectories (per seed run): {num_traj_main}")
+    print(f"Number of Simulation Points: {num_points}")
     print(f"Data Directory: {os.path.abspath(data_dir)}")
     print(f"Plot Directory: {os.path.abspath(plot_dir)}")
     print(f"Force Rerun All: {force_rerun}")
-    print(f"Regime Physical End Times: {regime_physical_t_ends}")
+    print(f"Effective seeds for +P (Plot1 error band/Plot4): {effective_num_seeds_pp}")
+    print(f"Effective seeds for TW (Plot4): {effective_num_seeds_tw}")
     print("-" * 30)
 
     all_results_data = {}
     simulation_methods = {"TW": run_full_simulation_tw, "PP": run_pplus_simulation_parallel}
     overall_start_time = time.time()
 
+    # --- Original Regime Simulations (for Plots 1-4) ---
+    print("\n--- Starting Original Regime Simulations (for Plots 1-4) ---")
     for regime_key, n_val in photon_regimes_config.items():
         all_results_data[regime_key] = {}
 
         current_physical_t_end = regime_physical_t_ends.get(regime_key)
-        if current_physical_t_end is None:
-            print(f"ERROR: Physical end time for regime '{regime_key}' not defined. Skipping.")
-            continue
-        if current_physical_t_end <= 0:
-            print(f"ERROR: Physical end time for regime '{regime_key}' must be positive. Skipping.")
-            continue
+        if current_physical_t_end is None: print(f"ERROR: No t_end for {regime_key}. Skipping."); continue
+        if current_physical_t_end <= 0: print(f"ERROR: t_end for {regime_key} must be > 0. Skipping."); continue
             
-        # Calculate physical dt for this regime to achieve num_points
         current_physical_dt = current_physical_t_end / (num_points - 1)
         
         print(f"\nProcessing: Regime='{regime_key}' (n={n_val})")
-        print(f"  Physical t_end={current_physical_t_end}, Physical dt={current_physical_dt:.4e} ({num_points-1} steps)")
+        print(f"  Physical t_end={current_physical_t_end}, Physical dt={current_physical_dt:.4e}")
 
         current_tspan_sim = (0, current_physical_t_end)
-        # t_eval for solve_ivp and for storing results should use num_points
         t_eval_physical = np.linspace(0, current_physical_t_end, num_points)
-
 
         for method_key, sim_function in simulation_methods.items():
             print(f"  Method='{method_key}'")
             all_results_data[regime_key][method_key] = {}
-            all_results_data[regime_key][method_key]['seed_runs_plot4'] = []
+            all_results_data[regime_key][method_key]['seed_runs_plot4'] = [] 
 
-            seeds_to_run = global_seeds_plot4[:num_seed_runs_plot4]
-            if not seeds_to_run :
-                seeds_to_run = [0]
-                if num_seed_runs_plot4 > 0:
-                     print("  Warning: num_seed_runs_plot4 > 0 but global_seeds_plot4 empty. Using default seed [0].")
+            seeds_to_iterate_for_this_method = []
+            if method_key == "TW":
+                seeds_to_iterate_for_this_method = global_seeds_config_list[:effective_num_seeds_tw]
+                print(f"    (TW method: processing {len(seeds_to_iterate_for_this_method)} seed(s))")
+            elif method_key == "PP":
+                seeds_to_iterate_for_this_method = global_seeds_config_list[:effective_num_seeds_pp]
+                print(f"    ({method_key} method: processing {len(seeds_to_iterate_for_this_method)} seed(s))")
+            
+            if not seeds_to_iterate_for_this_method:
+                 print(f"    Warning: No seeds to process for {method_key} in {regime_key}. Ensuring 'main' is handled if possible or skipped.")
+                 # Ensure 'main' key exists with None if no runs, to prevent KeyErrors in plotting
+                 all_results_data[regime_key][method_key]['main'] = None # Or some default empty structure
+                 continue
 
-            for seed_iter_idx, current_run_seed_val in enumerate(seeds_to_run):
-                is_main_run_for_plots123 = (seed_iter_idx == 0)
+
+            for seed_iter_idx, current_run_seed_val in enumerate(seeds_to_iterate_for_this_method):
+                is_main_run = (seed_iter_idx == 0) 
 
                 params_dict_run = {
                     'method': method_key, 'regime': regime_key, 'n': n_val,
                     'kappa': kappa, 'num_traj': num_traj_main,
-                    'physical_t_end': current_physical_t_end, # For filename hash
-                    'num_points': num_points,                 # For filename hash
+                    'physical_t_end': current_physical_t_end,
+                    'num_points': num_points,
                     'seed_run_type': f'seed_{current_run_seed_val}',
                     'global_seed': current_run_seed_val
                 }
-                if method_key == "PP":
-                     # Add physical_dt to params if it's crucial for hash,
-                     # though it's derived from t_end and num_points.
-                     # params_dict_run['physical_dt_pplus'] = current_physical_dt
-                     pass
-
-
                 filepath_run = generate_filename(params_dict_run, data_dir)
-                run_type_msg = "Main/Seed" if is_main_run_for_plots123 else "Seed"
-                print(f"    {run_type_msg} run (seed {current_run_seed_val}). File: {os.path.basename(filepath_run)}")
+                
+                run_type_msg = "Main" if is_main_run else f"{method_key}_SeedRun{seed_iter_idx+1}"
+                print(f"    {run_type_msg} (seed {current_run_seed_val}). File: {os.path.basename(filepath_run)}")
                 
                 current_run_data = None
                 if not force_rerun: current_run_data = load_simulation_data(filepath_run)
 
                 if current_run_data is None:
-                    print(f"      Running simulation for {run_type_msg.lower()} run (seed {current_run_seed_val})...")
-                    run_start_time = time.time()
-                    
+                    print(f"      Running simulation for {run_type_msg.lower()} (seed {current_run_seed_val})...")
+                    run_start_time_iter = time.time()
                     if method_key == "TW":
-                        # run_full_simulation_tw expects tspan and produces its own t_eval based on 500 points.
-                        # We need to modify run_full_simulation_tw to accept t_eval_physical
-                        # OR adjust its internal linspace to use num_points.
-                        # For now, assuming run_full_simulation_tw will be adapted or its internal
-                        # t_eval is sufficient, and we use t_eval_physical for consistency if needed later.
-                        # Let's assume for now it's called as before but we note the discrepancy.
-                        # A better way would be to modify run_full_simulation_tw to accept num_points or t_eval.
-                        # For this example, let's pass t_eval_physical to the function.
-                        # This implies run_full_simulation_tw needs to be updated to use it.
                         current_run_data = sim_function(n_val, num_traj_main, kappa, current_tspan_sim, 
-                                                        current_seed=current_run_seed_val, 
-                                                        t_eval_hint=t_eval_physical) # Pass t_eval_physical as a hint
+                                                        current_seed=current_run_seed_val, t_eval_hint=t_eval_physical)
                     elif method_key == "PP":
-                        current_run_data = sim_function(n_val, num_traj_main, kappa, 
-                                                        current_tspan_sim, current_physical_dt, # Pass calculated physical dt
-                                                        num_workers=num_workers, current_seed=current_run_seed_val)
+                        current_run_data = sim_function(n_val, num_traj_main, kappa, current_tspan_sim, 
+                                                        current_physical_dt, num_workers=num_workers, 
+                                                        current_seed=current_run_seed_val)
                     
-                    # Ensure the 'time_physical' key in current_run_data aligns with t_eval_physical
-                    # This might require adjustment in the simulation functions themselves to return
-                    # results at these specific time points.
-                    if current_run_data is not None and 'time_physical' in current_run_data:
+                    if current_run_data and 'time_physical' in current_run_data:
                         if not np.allclose(current_run_data['time_physical'], t_eval_physical):
-                            print("      Warning: Output time points from simulation may not exactly match desired t_eval_physical.")
-                            # Potentially interpolate results here if necessary, though ideally sim functions handle it.
-                        current_run_data['time_physical'] = t_eval_physical # Standardize for consistency if possible
-                    
+                            print("      Warning: Sim output time points mismatch desired t_eval.")
+                        current_run_data['time_physical'] = t_eval_physical 
                     save_simulation_data(filepath_run, current_run_data)
-                    run_end_time = time.time()
-                    print(f"      Sim for {run_type_msg.lower()} (seed {current_run_seed_val}) done: {run_end_time - run_start_time:.2f}s")
+                    run_end_time_iter = time.time()
+                    print(f"      Sim for {run_type_msg.lower()} done: {run_end_time_iter - run_start_time_iter:.2f}s")
                 
-                all_results_data[regime_key][method_key]['seed_runs_plot4'].append(current_run_data)
-                if is_main_run_for_plots123:
-                    all_results_data[regime_key][method_key]['main'] = current_run_data
+                if current_run_data:
+                    all_results_data[regime_key][method_key]['seed_runs_plot4'].append(current_run_data)
+                    if is_main_run:
+                        all_results_data[regime_key][method_key]['main'] = current_run_data
             
-            if 'main' not in all_results_data[regime_key][method_key] and all_results_data[regime_key][method_key]['seed_runs_plot4']:
-                all_results_data[regime_key][method_key]['main'] = all_results_data[regime_key][method_key]['seed_runs_plot4'][0]
-            elif 'main' not in all_results_data[regime_key][method_key]:
-                 print(f"Error: No simulation data for {method_key} in {regime_key} to assign to 'main'.")
+            if 'main' not in all_results_data[regime_key][method_key]:
+                if all_results_data[regime_key][method_key]['seed_runs_plot4']:
+                    all_results_data[regime_key][method_key]['main'] = all_results_data[regime_key][method_key]['seed_runs_plot4'][0]
+                else:
+                    print(f"Error: No simulation data for {method_key} in {regime_key} for 'main'.")
+                    all_results_data[regime_key][method_key]['main'] = None # Prevent KeyError
+    print("--- Original Regime Simulations Finished ---")
+
+    # --- N-Scan simulations for Max Squeezing Plot ---
+    if sim_params.get('n_scan_active', False):
+        print("\n--- Starting N-Scan Simulations for Max Squeezing Plot ---")
+        n_scan_values_conf = sim_params.get('n_scan_values', [])
+        n_scan_seeds_conf = sim_params.get('n_scan_seeds', [])
+        n_scan_t_ends_map_conf = sim_params.get('n_scan_t_ends', {})
+        
+        if not (n_scan_values_conf and n_scan_seeds_conf and n_scan_t_ends_map_conf):
+            print("   N-Scan configuration missing or incomplete. Skipping N-Scan.")
+        else:
+            if 'n_scan_results' not in all_results_data:
+                all_results_data['n_scan_results'] = {}
+
+            for n_val_scan in n_scan_values_conf:
+                if n_val_scan not in all_results_data['n_scan_results']:
+                     all_results_data['n_scan_results'][n_val_scan] = [None] * len(n_scan_seeds_conf)
+
+                current_physical_t_end_scan = n_scan_t_ends_map_conf.get(n_val_scan)
+                if current_physical_t_end_scan is None:
+                    print(f"    Skipping N-Scan for n={n_val_scan}: t_end not defined in n_scan_t_ends_map_conf.")
+                    continue
+                
+                current_tspan_sim_scan = (0, current_physical_t_end_scan)
+                t_eval_physical_scan = np.linspace(0, current_physical_t_end_scan, num_points)
+                current_physical_dt_scan = current_physical_t_end_scan / (num_points - 1)
+
+                print(f"  Processing N-Scan: n={n_val_scan}, t_end={current_physical_t_end_scan}")
+
+                for seed_idx, current_run_seed_val_scan in enumerate(n_scan_seeds_conf):
+                    print(f"    Seed {seed_idx+1}/{len(n_scan_seeds_conf)} (Global Seed: {current_run_seed_val_scan})")
+                    params_dict_run_scan = {
+                        'method': 'PP', 'regime': f'n_scan_{n_val_scan}', 'n': n_val_scan,
+                        'kappa': kappa, 'num_traj': num_traj_main,
+                        'physical_t_end': current_physical_t_end_scan, 'num_points': num_points,
+                        'seed_run_type': f'seed_{current_run_seed_val_scan}', 
+                        'global_seed': current_run_seed_val_scan
+                    }
+                    filepath_run_scan = generate_filename(params_dict_run_scan, data_dir)
+                    current_run_data_scan = None
+                    if not force_rerun: current_run_data_scan = load_simulation_data(filepath_run_scan)
+
+                    if current_run_data_scan is None:
+                        print(f"      Running +P simulation for n={n_val_scan}, seed={current_run_seed_val_scan}...")
+                        run_start_time_iter = time.time()
+                        current_run_data_scan = run_pplus_simulation_parallel(
+                            n_val_scan, num_traj_main, kappa, current_tspan_sim_scan, 
+                            current_physical_dt_scan, num_workers=num_workers, 
+                            current_seed=current_run_seed_val_scan
+                        )
+                        if current_run_data_scan and 'time_physical' in current_run_data_scan:
+                            if not np.allclose(current_run_data_scan['time_physical'], t_eval_physical_scan):
+                                print("      Warning: N-scan sim output time points mismatch desired t_eval.")
+                            current_run_data_scan['time_physical'] = t_eval_physical_scan
+                        save_simulation_data(filepath_run_scan, current_run_data_scan)
+                        run_end_time_iter = time.time()
+                        print(f"      Sim for n-scan done: {run_end_time_iter - run_start_time_iter:.2f}s")
+                    
+                    if n_val_scan in all_results_data['n_scan_results']:
+                        all_results_data['n_scan_results'][n_val_scan][seed_idx] = current_run_data_scan
+                    if current_run_data_scan is None:
+                        print(f"      Warning: Failed to load/run sim for n={n_val_scan}, seed={current_run_seed_val_scan}")
+            print("--- N-Scan Simulations Finished ---")
+    # --- End of N-Scan section ---
 
     overall_end_time = time.time()
     print(f"\nAll simulations/data loading finished in {overall_end_time - overall_start_time:.2f} seconds.")
     print("-" * 30)
     print("Generating plots...")
 
-    # Pass the whole config to plotting functions as they might need various parts of it
     if plot_conf.get('generate_plot1_squeezing', False):
         create_squeezing_plot(all_results_data, config, plot_dir)
     if plot_conf.get('generate_plot2_pump_depletion', False):
@@ -185,10 +254,16 @@ def main(config_path):
         create_photon_tracker_plot(all_results_data, config, plot_dir)
     if plot_conf.get('generate_plot4_seed_variance', False):
         create_seed_variance_plot(all_results_data, config, plot_dir)
+    
+    if plot_conf.get('generate_plot_max_squeezing_vs_n', False):
+        if 'n_scan_results' in all_results_data and \
+           any(seed_list for seed_list in all_results_data.get('n_scan_results', {}).values() if seed_list and any(s is not None for s in seed_list) ):
+            create_max_squeezing_vs_n_plot(all_results_data['n_scan_results'], config, plot_dir)
+        else:
+            print("   Skipping Max Squeezing vs N plot: No 'n_scan_results' data found or it's empty/all None.")
 
     print("-" * 30)
     print("Script finished successfully.")
-
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
