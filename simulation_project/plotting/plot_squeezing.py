@@ -23,12 +23,12 @@ def create_squeezing_plot(all_results, config, output_dir):
     
     regime_keys = list(photon_regimes_config.keys())
     
-    fig, axes = plt.subplots(1, len(regime_keys), 
-                             figsize=(6 * len(regime_keys), 5), 
+    fig, axes = plt.subplots(len(regime_keys), 1, 
+                             figsize=(8, 5 * len(regime_keys)), 
                              sharex=False, sharey=False)
     if len(regime_keys) == 1: axes = [axes]
 
-    fig.suptitle(f'Signal Quadrature Variance (Squeezing) Comparison', fontsize=16)
+    fig.suptitle(f'Signal Quadrature Variance (Squeezing) Comparison', fontsize=16, y=0.99)
 
     for i, regime_key in enumerate(regime_keys):
         ax = axes[i]
@@ -118,19 +118,24 @@ def create_squeezing_plot(all_results, config, output_dir):
 
         ax.axhline(y=0, color='k', linestyle=':', label='Vacuum (0 dB)')
         ax.set_title(f'{regime_key} Regime (n={n_val})')
-        ax.set_xlabel(f'Time (physical units)')
+        ax.set_xlabel(f'Time')
         if i == 0:
             ax.set_ylabel('Variance (dB rel. to Vacuum)')
+        else:
+            ax.set_ylabel('Variance (dB)')
         
         handles, labels = ax.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
-        ax.legend(by_label.values(), by_label.keys(), fontsize='small')
+        legend = ax.legend(by_label.values(), by_label.keys(), fontsize='small')
+        legend.set_frame_on(True)
+        legend.get_frame().set_facecolor('white')
+        legend.get_frame().set_edgecolor('black')
 
         ax.grid(True)
         ax.set_xlim(current_xlim)
         ax.set_ylim(current_ylim)
         
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.tight_layout(rect=[0, 0.02, 1, 0.98])
     plt.savefig(os.path.join(output_dir, "plot1_squeezing_comparison_with_error.png"), dpi=300)
     print("   Plot 1 (Squeezing Comparison - Physical Time with error) generated.")
     plt.close(fig)
