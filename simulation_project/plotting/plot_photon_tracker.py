@@ -45,7 +45,7 @@ def create_photon_tracker_plot(all_results, config, output_dir):
     fig.suptitle(f'Photon Number Tracker - {medium_regime_key} Regime (n={n_val_medium}) - Physical Time', fontsize=16)
 
     # TW Data
-    # ... (Previous TW data fetching and plotting logic, including your existing diagnostics) ...
+
     print(f"   PLOT 3: Checking TW data for regime '{medium_regime_key}'.")
     if 'TW' in all_results[medium_regime_key] and 'main' in all_results[medium_regime_key]['TW']:
         data_tw = all_results[medium_regime_key]['TW']['main']
@@ -66,11 +66,9 @@ def create_photon_tracker_plot(all_results, config, output_dir):
             axes[0].set_title('TW Method')
             axes[0].legend()
             axes[0].grid(True)
-        # ... (else clauses for missing keys/data)
-    # ...
 
     # +P Data
-    # ... (Previous +P data fetching and plotting logic, including your existing diagnostics) ...
+    
     print(f"   PLOT 3: Checking +P data for regime '{medium_regime_key}'.")
     if 'PP' in all_results[medium_regime_key] and 'main' in all_results[medium_regime_key]['PP']:
         data_pp = all_results[medium_regime_key]['PP']['main']

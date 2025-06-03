@@ -17,7 +17,7 @@ def pdc_full_system_tw(t, y, kappa):
         np.real(dalpha2_dt), np.imag(dalpha2_dt)
     ]
 
-# MODIFIED function signature to accept t_eval_hint
+
 def run_full_simulation_tw(n_current, num_trajectories, kappa, tspan_current_regime, 
                            current_seed=None, t_eval_hint=None): # Added t_eval_hint
     """

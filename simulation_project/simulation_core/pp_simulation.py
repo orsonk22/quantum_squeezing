@@ -11,7 +11,7 @@ import time # For timing within the function if needed
 def pdc_pplus_step_numba(y, kappa, dt): # Name kept as per original file provided
     """
     Numba jitted step function for +P.
-    MODIFIED to use REAL Wiener increments dW, which are then multiplied by complex diffusion coefficients.
+    
     """
     re_a1, im_a1, re_a1p, im_a1p, re_a2, im_a2, re_a2p, im_a2p = y
     alpha1 = re_a1 + 1j * im_a1

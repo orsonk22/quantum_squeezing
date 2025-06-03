@@ -111,5 +111,5 @@ plotting:
 
   plot3_photon_tracker_ylim: [-2, 30]
 
-  # MODIFIED: Threshold for the n-scan plot reliability
+  # Threshold for the n-scan plot reliability
   n_scan_reliability_std_threshold_linear: 0.035
